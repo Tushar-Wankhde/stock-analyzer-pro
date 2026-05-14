@@ -1,106 +1,157 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import numpy as np
+import yfinance as yf
+import requests
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import random
+import feedparser
 
-# =========================================================
+# =====================================================
 # PAGE
-# =========================================================
+# =====================================================
 
 st.set_page_config(
-    page_title="Tushar Smart Money Terminal",
+    page_title="Tushar Quant Terminal",
     layout="wide"
 )
 
-# =========================================================
+# =====================================================
 # CSS
-# =========================================================
+# =====================================================
 
 st.markdown("""
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
-
 .stApp{
-    background: linear-gradient(180deg,#e0f2fe,#f8fbff);
-}
-
-[data-testid="stSidebar"]{
-    background: linear-gradient(180deg,#dbeafe,#eff6ff);
+background:linear-gradient(180deg,#e0f2fe,#f8fbff);
 }
 
 .card{
-    background:white;
-    padding:22px;
-    border-radius:22px;
-    margin-bottom:20px;
-    border:1px solid #dbeafe;
-    box-shadow:0 10px 30px rgba(59,130,246,0.08);
-}
-
-.top{
-    background:linear-gradient(90deg,#2563eb,#38bdf8);
-    padding:30px;
-    border-radius:30px;
-    color:white;
-    margin-bottom:25px;
+background:white;
+padding:20px;
+border-radius:22px;
+margin-bottom:18px;
+border:1px solid #dbeafe;
+box-shadow:0 10px 30px rgba(0,0,0,0.05);
 }
 
 .buy{
-    background:#dcfce7;
-    color:#166534;
-    padding:18px;
-    border-radius:18px;
-    text-align:center;
-    font-size:32px;
-    font-weight:700;
+background:#dcfce7;
+padding:18px;
+border-radius:18px;
+text-align:center;
+font-size:32px;
+font-weight:700;
+color:#166534;
 }
 
 .sell{
-    background:#fee2e2;
-    color:#991b1b;
-    padding:18px;
-    border-radius:18px;
-    text-align:center;
-    font-size:32px;
-    font-weight:700;
+background:#fee2e2;
+padding:18px;
+border-radius:18px;
+text-align:center;
+font-size:32px;
+font-weight:700;
+color:#991b1b;
 }
 
 .hold{
-    background:#fef9c3;
-    color:#854d0e;
-    padding:18px;
-    border-radius:18px;
-    text-align:center;
-    font-size:32px;
-    font-weight:700;
+background:#fef9c3;
+padding:18px;
+border-radius:18px;
+text-align:center;
+font-size:32px;
+font-weight:700;
+color:#854d0e;
 }
 
-.small{
-    color:#64748b;
-    font-size:13px;
+.news{
+padding:12px;
+border-radius:12px;
+background:#f8fafc;
+margin-bottom:10px;
+border-left:4px solid #3b82f6;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# =========================================================
-# FUNCTIONS
-# =========================================================
+# =====================================================
+# SIDEBAR
+# =====================================================
 
-@st.cache_data(ttl=60)
-def fetch_data(ticker, interval):
+with st.sidebar:
 
-    df = yf.Ticker(ticker).history(
-        period="7d",
-        interval=interval,
+    st.title("📈 Quant Terminal")
+
+    market = st.selectbox(
+        "Market",
+        [
+            "NIFTY 50",
+            "BANK NIFTY",
+            "SENSEX",
+            "RELIANCE",
+            "TCS",
+            "INFY"
+        ]
+    )
+
+    timeframe = st.selectbox(
+        "Timeframe",
+        ["5m","15m","30m","60m","1d"],
+        index=1
+    )
+
+symbol_map = {
+    "NIFTY 50":"^NSEI",
+    "BANK NIFTY":"^NSEBANK",
+    "SENSEX":"^BSESN",
+    "RELIANCE":"RELIANCE.NS",
+    "TCS":"TCS.NS",
+    "INFY":"INFY.NS"
+}
+
+tv_map = {
+    "NIFTY 50":"NSE:NIFTY",
+    "BANK NIFTY":"NSE:BANKNIFTY",
+    "SENSEX":"BSE:SENSEX",
+    "RELIANCE":"NSE:RELIANCE",
+    "TCS":"NSE:TCS",
+    "INFY":"NSE:INFY"
+}
+
+symbol = symbol_map[market]
+tv_symbol = tv_map[market]
+
+# =====================================================
+# HEADER
+# =====================================================
+
+st.markdown("""
+<div class="card">
+
+<h1>📊 Tushar Smart Money Terminal</h1>
+
+<p>
+AI Assisted Market Intelligence Dashboard
+</p>
+
+</div>
+""", unsafe_allow_html=True)
+
+# =====================================================
+# DATA
+# =====================================================
+
+@st.cache_data(ttl=30)
+def get_data():
+
+    df = yf.download(
+        symbol,
+        period="5d",
+        interval=timeframe,
         auto_adjust=True
     )
 
@@ -108,122 +159,35 @@ def fetch_data(ticker, interval):
 
     return df
 
-def rsi(data, period=14):
-
-    delta = data.diff()
-
-    gain = delta.where(delta > 0, 0)
-
-    loss = -delta.where(delta < 0, 0)
-
-    avg_gain = gain.rolling(period).mean()
-
-    avg_loss = loss.rolling(period).mean()
-
-    rs = avg_gain / avg_loss
-
-    return 100 - (100 / (1 + rs))
-
-# =========================================================
-# SIDEBAR
-# =========================================================
-
-with st.sidebar:
-
-    st.title("📈 Smart Money")
-
-    market = st.selectbox(
-        "Market",
-        [
-            "NIFTY 50",
-            "BANK NIFTY",
-            "RELIANCE",
-            "TCS",
-            "INFY"
-        ]
-    )
-
-    interval = st.selectbox(
-        "Timeframe",
-        ["5m", "15m", "30m", "60m", "1d"],
-        index=1
-    )
-
-ticker_map = {
-    "NIFTY 50":"^NSEI",
-    "BANK NIFTY":"^NSEBANK",
-    "RELIANCE":"RELIANCE.NS",
-    "TCS":"TCS.NS",
-    "INFY":"INFY.NS"
-}
-
-ticker = ticker_map[market]
-
-# =========================================================
-# HEADER
-# =========================================================
-
-st.markdown("""
-<div class="top">
-
-<h1>📊 Tushar Smart Money Terminal</h1>
-
-<p>
-AI-assisted market analysis for educational and risk-aware trading.
-</p>
-
-</div>
-""", unsafe_allow_html=True)
-
-# =========================================================
-# QUOTES
-# =========================================================
-
-quotes = [
-
-    "Protect capital first. Profit comes later.",
-
-    "Volume reveals intention before price.",
-
-    "Fake breakouts trap emotions.",
-
-    "Discipline beats prediction.",
-
-    "Trend is probability, not certainty."
-
-]
-
-st.markdown(f"""
-<div class="card">
-
-<h3>💡 Market Wisdom</h3>
-
-<p>{random.choice(quotes)}</p>
-
-</div>
-""", unsafe_allow_html=True)
-
-# =========================================================
-# DATA
-# =========================================================
-
-df = fetch_data(ticker, interval)
+df = get_data()
 
 if df.empty:
 
-    st.error("No market data available.")
+    st.error("Data unavailable")
 
     st.stop()
 
-# =========================================================
+# =====================================================
 # INDICATORS
-# =========================================================
+# =====================================================
 
 df['EMA20'] = df['Close'].ewm(span=20).mean()
 
 df['EMA50'] = df['Close'].ewm(span=50).mean()
 
-df['RSI'] = rsi(df['Close'])
+delta = df['Close'].diff()
+
+gain = delta.where(delta > 0, 0)
+
+loss = -delta.where(delta < 0, 0)
+
+avg_gain = gain.rolling(14).mean()
+
+avg_loss = loss.rolling(14).mean()
+
+rs = avg_gain / avg_loss
+
+df['RSI'] = 100 - (100 / (1 + rs))
 
 df['VOLAVG'] = df['Volume'].rolling(20).mean()
 
@@ -231,20 +195,21 @@ latest = df.iloc[-1]
 
 price = latest['Close']
 
+volume_spike = latest['Volume'] > latest['VOLAVG'] * 1.8
+
 support = df['Low'].rolling(20).min().iloc[-1]
 
 resistance = df['High'].rolling(20).max().iloc[-1]
 
-volume_spike = latest['Volume'] > latest['VOLAVG'] * 1.8
-
 fake_breakout = (
     latest['High'] > df['High'].iloc[-2]
-    and latest['Close'] < latest['Open']
+    and
+    latest['Close'] < latest['Open']
 )
 
-# =========================================================
+# =====================================================
 # SIGNAL ENGINE
-# =========================================================
+# =====================================================
 
 score = 0
 
@@ -271,130 +236,294 @@ elif score <= 1:
     signal = "SELL"
     signal_class = "sell"
 
-confidence = min(score * 25, 95)
+confidence = score * 25
 
-# =========================================================
-# KPI
-# =========================================================
+# =====================================================
+# NSE OPTION CHAIN
+# =====================================================
 
-k1,k2,k3,k4 = st.columns(4)
+@st.cache_data(ttl=60)
+def get_option_chain():
+
+    try:
+
+        headers = {
+            "user-agent":"Mozilla/5.0"
+        }
+
+        session = requests.Session()
+
+        session.get(
+            "https://www.nseindia.com",
+            headers=headers
+        )
+
+        url = "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
+
+        response = session.get(
+            url,
+            headers=headers
+        )
+
+        data = response.json()
+
+        return data
+
+    except:
+
+        return None
+
+option_data = get_option_chain()
+
+# =====================================================
+# NEWS FEEDS
+# =====================================================
+
+rss_urls = [
+
+    "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+
+    "https://www.moneycontrol.com/rss/business.xml"
+
+]
+
+all_news = []
+
+for url in rss_urls:
+
+    try:
+
+        feed = feedparser.parse(url)
+
+        for entry in feed.entries[:5]:
+
+            all_news.append(entry.title)
+
+    except:
+
+        pass
+
+# =====================================================
+# MARKET SENTIMENT
+# =====================================================
+
+bullish_words = [
+    "surge",
+    "growth",
+    "rally",
+    "strong",
+    "record"
+]
+
+bearish_words = [
+    "war",
+    "crash",
+    "fear",
+    "inflation",
+    "selloff"
+]
+
+sentiment_score = 0
+
+for item in all_news:
+
+    title = item.lower()
+
+    for word in bullish_words:
+
+        if word in title:
+            sentiment_score += 1
+
+    for word in bearish_words:
+
+        if word in title:
+            sentiment_score -= 1
+
+market_sentiment = "NEUTRAL"
+
+if sentiment_score > 2:
+    market_sentiment = "BULLISH"
+
+elif sentiment_score < -2:
+    market_sentiment = "BEARISH"
+
+# =====================================================
+# VIX
+# =====================================================
+
+try:
+
+    vix = yf.download("^INDIAVIX", period="1d")
+
+    vix_price = round(vix['Close'].iloc[-1],2)
+
+except:
+
+    vix_price = 0
+
+# =====================================================
+# KPIs
+# =====================================================
+
+k1,k2,k3,k4,k5 = st.columns(5)
 
 change = price - df['Close'].iloc[-2]
 
 pct = (change / df['Close'].iloc[-2]) * 100
 
 with k1:
-    st.markdown(f"""
-    <div class="card">
-    <div class="small">Spot Price</div>
-    <h2>₹ {round(price,2)}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("Spot", round(price,2))
 
 with k2:
-    st.markdown(f"""
-    <div class="card">
-    <div class="small">Day Change</div>
-    <h2>{round(pct,2)}%</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("Change %", round(pct,2))
 
 with k3:
-    st.markdown(f"""
-    <div class="card">
-    <div class="small">RSI</div>
-    <h2>{round(latest['RSI'],2)}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("RSI", round(latest['RSI'],2))
 
 with k4:
-    st.markdown(f"""
-    <div class="card">
-    <div class="small">Confidence</div>
-    <h2>{confidence}%</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.metric("VIX", vix_price)
 
-# =========================================================
+with k5:
+    st.metric("Confidence", f"{confidence}%")
+
+# =====================================================
 # LAYOUT
-# =========================================================
+# =====================================================
 
-left, right = st.columns([3,1])
+left,right = st.columns([3,1])
 
-# =========================================================
-# CHART
-# =========================================================
+# =====================================================
+# LEFT
+# =====================================================
 
 with left:
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
-    st.subheader("📈 Price Action")
+    st.subheader("📈 TradingView Chart")
 
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        shared_xaxes=True,
-        row_heights=[0.7,0.3]
-    )
+    st.components.v1.html(f"""
 
-    fig.add_trace(
-        go.Candlestick(
-            x=df.index,
-            open=df['Open'],
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close']
-        ),
-        row=1,
-        col=1
-    )
+    <div class="tradingview-widget-container">
 
-    fig.add_trace(
-        go.Scatter(
-            x=df.index,
-            y=df['EMA20'],
-            name="EMA20"
-        ),
-        row=1,
-        col=1
-    )
+      <div id="tradingview_chart"></div>
 
-    fig.add_trace(
-        go.Scatter(
-            x=df.index,
-            y=df['EMA50'],
-            name="EMA50"
-        ),
-        row=1,
-        col=1
-    )
+      <script type="text/javascript"
+      src="https://s3.tradingview.com/tv.js"></script>
 
-    fig.add_trace(
-        go.Bar(
-            x=df.index,
-            y=df['Volume'],
-            name="Volume"
-        ),
-        row=2,
-        col=1
-    )
+      <script type="text/javascript">
 
-    fig.update_layout(
-        template="plotly_white",
-        height=700,
-        xaxis_rangeslider_visible=False
-    )
+      new TradingView.widget({{
 
-    st.plotly_chart(fig, use_container_width=True)
+        "width": "100%",
+        "height": 720,
+
+        "symbol": "{tv_symbol}",
+
+        "interval": "15",
+
+        "timezone": "Asia/Kolkata",
+
+        "theme": "light",
+
+        "style": "1",
+
+        "locale": "en",
+
+        "toolbar_bg": "#f1f5f9",
+
+        "enable_publishing": false,
+
+        "allow_symbol_change": true,
+
+        "studies": [
+
+            "RSI@tv-basicstudies",
+            "MACD@tv-basicstudies",
+            "Volume@tv-basicstudies",
+            "VWAP@tv-basicstudies",
+            "BB@tv-basicstudies"
+
+        ],
+
+        "container_id": "tradingview_chart"
+
+      }});
+
+      </script>
+
+    </div>
+
+    """, height=740)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================================================
+    # OPTION CHAIN
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    st.subheader("📊 Option Chain")
+
+    if option_data:
+
+        records = option_data['records']['data']
+
+        table = []
+
+        for item in records[:15]:
+
+            strike = item.get('strikePrice')
+
+            ce_oi = item.get('CE',{}).get('openInterest',0)
+
+            pe_oi = item.get('PE',{}).get('openInterest',0)
+
+            ce_change = item.get('CE',{}).get('changeinOpenInterest',0)
+
+            pe_change = item.get('PE',{}).get('changeinOpenInterest',0)
+
+            table.append([
+
+                strike,
+                ce_oi,
+                pe_oi,
+                ce_change,
+                pe_change
+
+            ])
+
+        option_df = pd.DataFrame(
+
+            table,
+
+            columns=[
+                "Strike",
+                "CE OI",
+                "PE OI",
+                "CE OI Change",
+                "PE OI Change"
+            ]
+
+        )
+
+        st.dataframe(
+            option_df,
+            use_container_width=True
+        )
+
+    else:
+
+        st.warning("Option chain unavailable")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
 # RIGHT
-# =========================================================
+# =====================================================
 
 with right:
+
+    # SIGNAL
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
@@ -405,62 +534,75 @@ with right:
         unsafe_allow_html=True
     )
 
-    st.write(f"Confidence: {confidence}%")
+    st.write(f"Signal Confidence: {confidence}%")
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # WARNINGS
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
-    st.subheader("🚨 Warnings")
+    st.subheader("🚨 Smart Warnings")
 
     if fake_breakout:
-        st.error(
-            "Fake breakout detected. Retail traders may get trapped."
-        )
+        st.error("Fake breakout detected")
 
     if volume_spike:
-        st.warning(
-            "Volume spike detected. Smart money activity possible."
-        )
+        st.warning("Volume spike detected")
 
     if abs(price - support) < 30:
-        st.success(
-            f"Near support ₹{round(support,2)}. Bounce possible."
-        )
+        st.success("Support bounce possible")
 
     if abs(price - resistance) < 30:
-        st.warning(
-            f"Near resistance ₹{round(resistance,2)}. Pullback possible."
-        )
+        st.warning("Resistance pullback possible")
 
     if latest['RSI'] > 70:
-        st.error(
-            "Overbought zone. Profit booking risk."
-        )
+        st.error("Overbought zone")
 
     if latest['RSI'] < 30:
-        st.success(
-            "Oversold zone. Short covering bounce possible."
-        )
+        st.success("Oversold zone")
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # MARKET MOOD
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
     st.subheader("🌍 Market Mood")
 
-    st.success("NASDAQ → Positive")
+    st.write(f"Sentiment: {market_sentiment}")
 
-    st.info("GIFT NIFTY → Supportive")
+    if vix_price > 18:
+        st.error("High Fear")
 
-    st.warning("VIX → Elevated")
+    elif vix_price < 12:
+        st.success("Low Fear")
+
+    else:
+        st.info("Normal Volatility")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================================================
+    # NEWS
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    st.subheader("📰 Market News")
+
+    for item in all_news[:10]:
+
+        st.markdown(f"""
+        <div class="news">
+        {item}
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
 # FOOTER
-# =========================================================
+# =====================================================
 
 st.caption(
-    "Educational tool only. Markets involve risk. No signal guarantees profit."
+    "Educational tool only. Markets involve risk. No guaranteed profit signals."
 )

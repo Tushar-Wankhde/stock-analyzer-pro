@@ -6,24 +6,23 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import random
 
-# ==========================================================
-# PAGE CONFIG
-# ==========================================================
+# =========================================================
+# PAGE
+# =========================================================
 
 st.set_page_config(
-    page_title="Tushar Trading Assistant",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Tushar Smart Money Terminal",
+    layout="wide"
 )
 
-# ==========================================================
-# PREMIUM CSS
-# ==========================================================
+# =========================================================
+# CSS
+# =========================================================
 
 st.markdown("""
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
@@ -33,136 +32,85 @@ html, body, [class*="css"] {
     background: linear-gradient(180deg,#e0f2fe,#f8fbff);
 }
 
-/* Sidebar */
-
 [data-testid="stSidebar"]{
     background: linear-gradient(180deg,#dbeafe,#eff6ff);
-    border-right:1px solid #bfdbfe;
 }
 
-/* Cards */
-
-.glass-card{
-    background: rgba(255,255,255,0.82);
-    backdrop-filter: blur(10px);
-    border-radius:24px;
+.card{
+    background:white;
     padding:22px;
+    border-radius:22px;
     margin-bottom:20px;
-    border:1px solid rgba(255,255,255,0.9);
-    box-shadow:0 10px 35px rgba(59,130,246,0.08);
+    border:1px solid #dbeafe;
+    box-shadow:0 10px 30px rgba(59,130,246,0.08);
 }
 
-/* Header */
-
-.top-nav{
-    background: linear-gradient(90deg,#2563eb,#38bdf8);
-    border-radius:28px;
-    padding:28px;
+.top{
+    background:linear-gradient(90deg,#2563eb,#38bdf8);
+    padding:30px;
+    border-radius:30px;
     color:white;
-    margin-bottom:24px;
-    box-shadow:0 12px 40px rgba(37,99,235,0.25);
-}
-
-/* KPI */
-
-.kpi-title{
-    font-size:13px;
-    color:#64748b;
-    margin-bottom:8px;
-}
-
-.kpi-value{
-    font-size:34px;
-    font-weight:700;
-    color:#0f172a;
-}
-
-.green{
-    color:#10b981;
-}
-
-.red{
-    color:#ef4444;
-}
-
-/* Signal Box */
-
-.signal-box{
-    padding:18px;
-    border-radius:18px;
-    text-align:center;
-    font-weight:700;
-    font-size:30px;
+    margin-bottom:25px;
 }
 
 .buy{
     background:#dcfce7;
     color:#166534;
+    padding:18px;
+    border-radius:18px;
+    text-align:center;
+    font-size:32px;
+    font-weight:700;
 }
 
 .sell{
     background:#fee2e2;
     color:#991b1b;
+    padding:18px;
+    border-radius:18px;
+    text-align:center;
+    font-size:32px;
+    font-weight:700;
 }
 
-.neutral{
+.hold{
     background:#fef9c3;
     color:#854d0e;
-}
-
-/* News */
-
-.news-box{
-    background:white;
-    border-radius:14px;
-    padding:14px;
-    margin-bottom:12px;
-    border:1px solid #e2e8f0;
-}
-
-/* Levels */
-
-.level-box{
-    background:#ffffff;
-    border-radius:14px;
-    padding:10px;
-    margin-bottom:10px;
-    border:1px solid #dbeafe;
-}
-
-/* Footer */
-
-.footer{
+    padding:18px;
+    border-radius:18px;
     text-align:center;
+    font-size:32px;
+    font-weight:700;
+}
+
+.small{
     color:#64748b;
-    font-size:12px;
-    padding:20px;
+    font-size:13px;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================================
+# =========================================================
 # FUNCTIONS
-# ==========================================================
+# =========================================================
 
 @st.cache_data(ttl=60)
 def fetch_data(ticker, interval):
 
-    data = yf.Ticker(ticker).history(
+    df = yf.Ticker(ticker).history(
         period="7d",
         interval=interval,
-        auto_adjust=True,
-        prepost=True
+        auto_adjust=True
     )
 
-    data.dropna(inplace=True)
+    df.dropna(inplace=True)
 
-    return data
+    return df
 
-def calculate_rsi(df, period=14):
+def rsi(data, period=14):
 
-    delta = df['Close'].diff()
+    delta = data.diff()
 
     gain = delta.where(delta > 0, 0)
 
@@ -174,536 +122,345 @@ def calculate_rsi(df, period=14):
 
     rs = avg_gain / avg_loss
 
-    rsi = 100 - (100 / (1 + rs))
+    return 100 - (100 / (1 + rs))
 
-    return rsi
-
-def calculate_atr(df, period=14):
-
-    high_low = df['High'] - df['Low']
-
-    high_close = np.abs(df['High'] - df['Close'].shift())
-
-    low_close = np.abs(df['Low'] - df['Close'].shift())
-
-    ranges = pd.concat([high_low, high_close, low_close], axis=1)
-
-    true_range = np.max(ranges, axis=1)
-
-    atr = pd.Series(true_range).rolling(period).mean()
-
-    return atr
-
-# ==========================================================
+# =========================================================
 # SIDEBAR
-# ==========================================================
+# =========================================================
 
 with st.sidebar:
 
-    st.title("📈 Quant Terminal")
+    st.title("📈 Smart Money")
 
     market = st.selectbox(
-        "Select Market",
+        "Market",
         [
             "NIFTY 50",
             "BANK NIFTY",
-            "SENSEX",
             "RELIANCE",
             "TCS",
             "INFY"
         ]
     )
 
-    ticker_map = {
-        "NIFTY 50": "^NSEI",
-        "BANK NIFTY": "^NSEBANK",
-        "SENSEX": "^BSESN",
-        "RELIANCE": "RELIANCE.NS",
-        "TCS": "TCS.NS",
-        "INFY": "INFY.NS"
-    }
-
-    ticker = ticker_map[market]
-
-    timeframe = st.selectbox(
+    interval = st.selectbox(
         "Timeframe",
         ["5m", "15m", "30m", "60m", "1d"],
         index=1
     )
 
-    st.markdown("---")
+ticker_map = {
+    "NIFTY 50":"^NSEI",
+    "BANK NIFTY":"^NSEBANK",
+    "RELIANCE":"RELIANCE.NS",
+    "TCS":"TCS.NS",
+    "INFY":"INFY.NS"
+}
 
-    st.subheader("🌍 Global Market Mood")
+ticker = ticker_map[market]
 
-    st.success("NASDAQ → Bullish")
-    st.success("NIKKEI → Bullish")
-    st.warning("VIX → Volatile")
-    st.info("GIFT NIFTY → Positive")
-
-# ==========================================================
+# =========================================================
 # HEADER
-# ==========================================================
+# =========================================================
 
 st.markdown("""
-<div class="top-nav">
+<div class="top">
 
-<h1>
-📊 Tushar Trading Assistant
-</h1>
+<h1>📊 Tushar Smart Money Terminal</h1>
 
 <p>
-AI Powered Smart Money Analysis Terminal
+AI-assisted market analysis for educational and risk-aware trading.
 </p>
 
 </div>
 """, unsafe_allow_html=True)
 
-# ==========================================================
-# MARKET WISDOM
-# ==========================================================
+# =========================================================
+# QUOTES
+# =========================================================
 
-market_quotes = [
+quotes = [
 
-    "Retailers chase candles. Smart money creates them.",
+    "Protect capital first. Profit comes later.",
 
-    "Volume reveals intention before price reveals direction.",
+    "Volume reveals intention before price.",
 
-    "Fake breakouts trap emotions, not charts.",
+    "Fake breakouts trap emotions.",
 
-    "Support and resistance are psychological battle zones.",
+    "Discipline beats prediction.",
 
-    "Market rewards patience, not prediction.",
-
-    "FII builds positions quietly while retailers panic.",
-
-    "Trend is your probability advantage.",
-
-    "Big candles attract retailers. Smart money exits there."
+    "Trend is probability, not certainty."
 
 ]
 
-quote = random.choice(market_quotes)
-
 st.markdown(f"""
-<div class="glass-card">
+<div class="card">
 
 <h3>💡 Market Wisdom</h3>
 
-<p style="
-font-size:18px;
-color:#1e293b;
-font-weight:500;
-">
-{quote}
-</p>
+<p>{random.choice(quotes)}</p>
 
 </div>
 """, unsafe_allow_html=True)
 
-# ==========================================================
+# =========================================================
 # DATA
-# ==========================================================
+# =========================================================
 
-df = fetch_data(ticker, timeframe)
+df = fetch_data(ticker, interval)
 
-# ==========================================================
-# MAIN
-# ==========================================================
+if df.empty:
 
-if df is not None and not df.empty:
+    st.error("No market data available.")
 
-    # ======================================================
-    # INDICATORS
-    # ======================================================
+    st.stop()
 
-    df['EMA20'] = df['Close'].ewm(span=20).mean()
+# =========================================================
+# INDICATORS
+# =========================================================
 
-    df['EMA50'] = df['Close'].ewm(span=50).mean()
+df['EMA20'] = df['Close'].ewm(span=20).mean()
 
-    df['RSI'] = calculate_rsi(df)
+df['EMA50'] = df['Close'].ewm(span=50).mean()
 
-    df['ATR'] = calculate_atr(df)
+df['RSI'] = rsi(df['Close'])
 
-    df['VolumeAvg'] = df['Volume'].rolling(20).mean()
+df['VOLAVG'] = df['Volume'].rolling(20).mean()
 
-    df['VolumeSpike'] = df['Volume'] > (df['VolumeAvg'] * 2)
+latest = df.iloc[-1]
 
-    df['FakeBreakout'] = (
-        (df['High'] > df['High'].shift(1)) &
-        (df['Close'] < df['Open'])
+price = latest['Close']
+
+support = df['Low'].rolling(20).min().iloc[-1]
+
+resistance = df['High'].rolling(20).max().iloc[-1]
+
+volume_spike = latest['Volume'] > latest['VOLAVG'] * 1.8
+
+fake_breakout = (
+    latest['High'] > df['High'].iloc[-2]
+    and latest['Close'] < latest['Open']
+)
+
+# =========================================================
+# SIGNAL ENGINE
+# =========================================================
+
+score = 0
+
+if latest['Close'] > latest['EMA20']:
+    score += 1
+
+if latest['EMA20'] > latest['EMA50']:
+    score += 1
+
+if latest['RSI'] > 55:
+    score += 1
+
+if volume_spike:
+    score += 1
+
+signal = "HOLD"
+signal_class = "hold"
+
+if score >= 3:
+    signal = "BUY"
+    signal_class = "buy"
+
+elif score <= 1:
+    signal = "SELL"
+    signal_class = "sell"
+
+confidence = min(score * 25, 95)
+
+# =========================================================
+# KPI
+# =========================================================
+
+k1,k2,k3,k4 = st.columns(4)
+
+change = price - df['Close'].iloc[-2]
+
+pct = (change / df['Close'].iloc[-2]) * 100
+
+with k1:
+    st.markdown(f"""
+    <div class="card">
+    <div class="small">Spot Price</div>
+    <h2>₹ {round(price,2)}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+with k2:
+    st.markdown(f"""
+    <div class="card">
+    <div class="small">Day Change</div>
+    <h2>{round(pct,2)}%</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+with k3:
+    st.markdown(f"""
+    <div class="card">
+    <div class="small">RSI</div>
+    <h2>{round(latest['RSI'],2)}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+with k4:
+    st.markdown(f"""
+    <div class="card">
+    <div class="small">Confidence</div>
+    <h2>{confidence}%</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =========================================================
+# LAYOUT
+# =========================================================
+
+left, right = st.columns([3,1])
+
+# =========================================================
+# CHART
+# =========================================================
+
+with left:
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    st.subheader("📈 Price Action")
+
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        row_heights=[0.7,0.3]
     )
 
-    latest = df.iloc[-1]
+    fig.add_trace(
+        go.Candlestick(
+            x=df.index,
+            open=df['Open'],
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close']
+        ),
+        row=1,
+        col=1
+    )
 
-    support = round(df['Low'].rolling(20).min().iloc[-1], 2)
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df['EMA20'],
+            name="EMA20"
+        ),
+        row=1,
+        col=1
+    )
 
-    resistance = round(df['High'].rolling(20).max().iloc[-1], 2)
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df['EMA50'],
+            name="EMA50"
+        ),
+        row=1,
+        col=1
+    )
 
-    price = latest['Close']
+    fig.add_trace(
+        go.Bar(
+            x=df.index,
+            y=df['Volume'],
+            name="Volume"
+        ),
+        row=2,
+        col=1
+    )
 
-    # ======================================================
-    # SIGNAL ENGINE
-    # ======================================================
+    fig.update_layout(
+        template="plotly_white",
+        height=700,
+        xaxis_rangeslider_visible=False
+    )
 
-    signal = "HOLD"
+    st.plotly_chart(fig, use_container_width=True)
 
-    signal_class = "neutral"
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if latest['Close'] > latest['EMA20'] > latest['EMA50'] and latest['RSI'] > 55:
+# =========================================================
+# RIGHT
+# =========================================================
 
-        signal = "BUY"
+with right:
 
-        signal_class = "buy"
+    st.markdown('<div class="card">', unsafe_allow_html=True)
 
-    elif latest['Close'] < latest['EMA20'] < latest['EMA50'] and latest['RSI'] < 45:
+    st.subheader("🤖 AI Signal")
 
-        signal = "SELL"
+    st.markdown(
+        f'<div class="{signal_class}">{signal}</div>',
+        unsafe_allow_html=True
+    )
 
-        signal_class = "sell"
+    st.write(f"Confidence: {confidence}%")
 
-    # ======================================================
-    # WARNINGS
-    # ======================================================
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    warnings = []
+    st.markdown('<div class="card">', unsafe_allow_html=True)
 
-    if latest['FakeBreakout']:
+    st.subheader("🚨 Warnings")
 
-        warnings.append(
-            "⚠️ Fake breakout detected. Retail breakout traders may get trapped."
+    if fake_breakout:
+        st.error(
+            "Fake breakout detected. Retail traders may get trapped."
         )
 
-    if abs(price - support) < (latest['ATR'] * 0.5):
-
-        warnings.append(
-            f"🟢 Price near support ₹{support}. Bounce possible."
+    if volume_spike:
+        st.warning(
+            "Volume spike detected. Smart money activity possible."
         )
 
-    if abs(price - resistance) < (latest['ATR'] * 0.5):
-
-        warnings.append(
-            f"🔴 Price near resistance ₹{resistance}. Pullback possible."
+    if abs(price - support) < 30:
+        st.success(
+            f"Near support ₹{round(support,2)}. Bounce possible."
         )
 
-    if latest['VolumeSpike']:
-
-        warnings.append(
-            "📈 Unusual volume spike detected. Smart money activity possible."
+    if abs(price - resistance) < 30:
+        st.warning(
+            f"Near resistance ₹{round(resistance,2)}. Pullback possible."
         )
 
     if latest['RSI'] > 70:
-
-        warnings.append(
-            "🔥 Overbought zone. Profit booking possible."
+        st.error(
+            "Overbought zone. Profit booking risk."
         )
 
     if latest['RSI'] < 30:
-
-        warnings.append(
-            "❄️ Oversold zone. Short covering bounce possible."
+        st.success(
+            "Oversold zone. Short covering bounce possible."
         )
 
-    # ======================================================
-    # KPI ROW
-    # ======================================================
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    c1, c2, c3, c4 = st.columns(4)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
 
-    ltp = round(latest['Close'], 2)
+    st.subheader("🌍 Market Mood")
 
-    prev_close = round(df['Close'].iloc[-2], 2)
+    st.success("NASDAQ → Positive")
 
-    change = round(ltp - prev_close, 2)
+    st.info("GIFT NIFTY → Supportive")
 
-    pct = round((change / prev_close) * 100, 2)
+    st.warning("VIX → Elevated")
 
-    with c1:
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div class="glass-card">
-        <div class="kpi-title">SPOT PRICE</div>
-        <div class="kpi-value">₹ {ltp}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c2:
-
-        color = "green" if pct >= 0 else "red"
-
-        st.markdown(f"""
-        <div class="glass-card">
-        <div class="kpi-title">DAY CHANGE</div>
-        <div class="kpi-value {color}">{pct}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c3:
-
-        st.markdown(f"""
-        <div class="glass-card">
-        <div class="kpi-title">RSI</div>
-        <div class="kpi-value">{round(latest['RSI'],2)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c4:
-
-        st.markdown(f"""
-        <div class="glass-card">
-        <div class="kpi-title">VOLUME</div>
-        <div class="kpi-value">{int(latest['Volume'])}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # ======================================================
-    # MAIN GRID
-    # ======================================================
-
-    left, right = st.columns([3, 1])
-
-    # ======================================================
-    # LEFT SIDE
-    # ======================================================
-
-    with left:
-
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
-        st.subheader("📈 Smart Money Chart")
-
-        fig = make_subplots(
-            rows=2,
-            cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.04,
-            row_heights=[0.75, 0.25]
-        )
-
-        fig.add_trace(
-            go.Candlestick(
-                x=df.index,
-                open=df['Open'],
-                high=df['High'],
-                low=df['Low'],
-                close=df['Close'],
-                name='Price'
-            ),
-            row=1,
-            col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df.index,
-                y=df['EMA20'],
-                name='EMA20',
-                line=dict(color='blue', width=2)
-            ),
-            row=1,
-            col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df.index,
-                y=df['EMA50'],
-                name='EMA50',
-                line=dict(color='red', width=2)
-            ),
-            row=1,
-            col=1
-        )
-
-        fig.add_trace(
-            go.Bar(
-                x=df.index,
-                y=df['Volume'],
-                name='Volume'
-            ),
-            row=2,
-            col=1
-        )
-
-        fig.update_layout(
-            template='plotly_white',
-            height=700,
-            xaxis_rangeslider_visible=False,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(255,255,255,0.4)',
-            hovermode='x unified'
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ==================================================
-        # PROBABILITY ENGINE
-        # ==================================================
-
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
-        st.subheader("🎯 Market Probability Ladder")
-
-        spot = round(ltp, -2)
-
-        for i in range(-5, 6):
-
-            level = spot + (i * 100)
-
-            probability = np.random.randint(25, 90)
-
-            st.markdown(f"""
-            <div class="level-box">
-            <b>{level}</b> → {probability}% probability
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.caption(
-            "AI probability model based on trend, volatility and momentum"
-        )
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ======================================================
-    # RIGHT SIDE
-    # ======================================================
-
-    with right:
-
-        # ==================================================
-        # SIGNAL
-        # ==================================================
-
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
-        st.subheader("🤖 AI Signal")
-
-        st.markdown(f"""
-        <div class="signal-box {signal_class}">
-        {signal}
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ==================================================
-        # WARNINGS
-        # ==================================================
-
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
-        st.subheader("🚨 Smart Warnings")
-
-        if warnings:
-
-            for w in warnings:
-
-                st.warning(w)
-
-        else:
-
-            st.success("No major danger zones detected.")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ==================================================
-        # SMART MONEY
-        # ==================================================
-
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
-        st.subheader("🏦 Smart Money")
-
-        if signal == "BUY":
-
-            st.success("FII likely long buildup")
-
-            st.info("Retail chasing upside")
-
-            st.warning("Put writing visible")
-
-        elif signal == "SELL":
-
-            st.error("Call writing heavy")
-
-            st.warning("Retail trapped in calls")
-
-            st.info("FII defensive positioning")
-
-        else:
-
-            st.info("Neutral positioning")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ==================================================
-        # PCR / OI
-        # ==================================================
-
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
-        st.subheader("📊 OI & PCR")
-
-        pcr = round(np.random.uniform(0.7, 1.4), 2)
-
-        st.metric("PCR", pcr)
-
-        if pcr > 1:
-
-            st.success("Bullish PCR")
-
-        else:
-
-            st.error("Bearish PCR")
-
-        st.metric("Call Writing", "Heavy")
-
-        st.metric("Put Writing", "Moderate")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ==================================================
-        # NEWS
-        # ==================================================
-
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-
-        st.subheader("📰 Market Pulse")
-
-        try:
-
-            news = yf.Ticker(ticker).news
-
-            for item in news[:5]:
-
-                title = item.get('title', 'No Title')
-
-                publisher = item.get('publisher', 'Unknown')
-
-                st.markdown(f"""
-                <div class="news-box">
-                <b>{title}</b><br>
-                <small>{publisher}</small>
-                </div>
-                """, unsafe_allow_html=True)
-
-        except:
-
-            st.info("News unavailable")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-else:
-
-    st.error("Unable to fetch market data")
-
-# ==========================================================
+# =========================================================
 # FOOTER
-# ==========================================================
+# =========================================================
 
-st.markdown("""
-<div class="footer">
-Built by Tushar Wankhade • Smart Money Quant Terminal
-</div>
-""", unsafe_allow_html=True)
+st.caption(
+    "Educational tool only. Markets involve risk. No signal guarantees profit."
+)

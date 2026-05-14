@@ -6,10 +6,9 @@ import requests
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import random
-import feedparser
 
 # =====================================================
-# PAGE
+# PAGE CONFIG
 # =====================================================
 
 st.set_page_config(
@@ -73,6 +72,14 @@ border-radius:12px;
 background:#f8fafc;
 margin-bottom:10px;
 border-left:4px solid #3b82f6;
+}
+
+.metric-box{
+background:white;
+padding:15px;
+border-radius:16px;
+text-align:center;
+border:1px solid #dbeafe;
 }
 
 </style>
@@ -142,28 +149,39 @@ AI Assisted Market Intelligence Dashboard
 """, unsafe_allow_html=True)
 
 # =====================================================
-# DATA
+# FETCH DATA
 # =====================================================
 
 @st.cache_data(ttl=30)
 def get_data():
 
-    df = yf.download(
-        symbol,
-        period="5d",
-        interval=timeframe,
-        auto_adjust=True
-    )
+    try:
 
-    df.dropna(inplace=True)
+        df = yf.download(
+            symbol,
+            period="5d",
+            interval=timeframe,
+            auto_adjust=True,
+            progress=False
+        )
 
-    return df
+        if isinstance(df.columns, pd.MultiIndex):
+
+            df.columns = df.columns.get_level_values(0)
+
+        df.dropna(inplace=True)
+
+        return df
+
+    except:
+
+        return pd.DataFrame()
 
 df = get_data()
 
 if df.empty:
 
-    st.error("Data unavailable")
+    st.error("Unable to fetch market data")
 
     st.stop()
 
@@ -193,18 +211,47 @@ df['VOLAVG'] = df['Volume'].rolling(20).mean()
 
 latest = df.iloc[-1]
 
-price = latest['Close']
+price = float(latest['Close'])
 
-volume_spike = latest['Volume'] > latest['VOLAVG'] * 1.8
+# =====================================================
+# SAFE VOLUME SPIKE
+# =====================================================
 
-support = df['Low'].rolling(20).min().iloc[-1]
+if pd.isna(latest['VOLAVG']):
 
-resistance = df['High'].rolling(20).max().iloc[-1]
+    volume_spike = False
+
+else:
+
+    volume_spike = (
+        float(latest['Volume']) >
+        float(latest['VOLAVG']) * 1.8
+    )
+
+# =====================================================
+# SUPPORT / RESISTANCE
+# =====================================================
+
+support = float(
+    df['Low'].rolling(20).min().iloc[-1]
+)
+
+resistance = float(
+    df['High'].rolling(20).max().iloc[-1]
+)
+
+# =====================================================
+# FAKE BREAKOUT
+# =====================================================
 
 fake_breakout = (
+
     latest['High'] > df['High'].iloc[-2]
+
     and
+
     latest['Close'] < latest['Open']
+
 )
 
 # =====================================================
@@ -229,17 +276,19 @@ signal = "HOLD"
 signal_class = "hold"
 
 if score >= 3:
+
     signal = "BUY"
     signal_class = "buy"
 
 elif score <= 1:
+
     signal = "SELL"
     signal_class = "sell"
 
 confidence = score * 25
 
 # =====================================================
-# NSE OPTION CHAIN
+# OPTION CHAIN
 # =====================================================
 
 @st.cache_data(ttl=60)
@@ -276,35 +325,27 @@ def get_option_chain():
 option_data = get_option_chain()
 
 # =====================================================
-# NEWS FEEDS
+# NEWS
 # =====================================================
-
-rss_urls = [
-
-    "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-
-    "https://www.moneycontrol.com/rss/business.xml"
-
-]
 
 all_news = []
 
-for url in rss_urls:
+try:
 
-    try:
+    news = yf.Ticker(symbol).news
 
-        feed = feedparser.parse(url)
+    for item in news[:10]:
 
-        for entry in feed.entries[:5]:
+        title = item.get("title","")
 
-            all_news.append(entry.title)
+        all_news.append(title)
 
-    except:
+except:
 
-        pass
+    pass
 
 # =====================================================
-# MARKET SENTIMENT
+# SENTIMENT ENGINE
 # =====================================================
 
 bullish_words = [
@@ -312,7 +353,8 @@ bullish_words = [
     "growth",
     "rally",
     "strong",
-    "record"
+    "record",
+    "bullish"
 ]
 
 bearish_words = [
@@ -320,56 +362,96 @@ bearish_words = [
     "crash",
     "fear",
     "inflation",
-    "selloff"
+    "selloff",
+    "bearish"
 ]
 
 sentiment_score = 0
 
 for item in all_news:
 
-    title = item.lower()
+    text = item.lower()
 
     for word in bullish_words:
 
-        if word in title:
+        if word in text:
             sentiment_score += 1
 
     for word in bearish_words:
 
-        if word in title:
+        if word in text:
             sentiment_score -= 1
 
 market_sentiment = "NEUTRAL"
 
 if sentiment_score > 2:
+
     market_sentiment = "BULLISH"
 
 elif sentiment_score < -2:
+
     market_sentiment = "BEARISH"
 
 # =====================================================
-# VIX
+# INDIA VIX
 # =====================================================
 
 try:
 
-    vix = yf.download("^INDIAVIX", period="1d")
+    vix = yf.download(
+        "^INDIAVIX",
+        period="1d",
+        progress=False
+    )
 
-    vix_price = round(vix['Close'].iloc[-1],2)
+    vix_price = round(
+        float(vix['Close'].iloc[-1]),
+        2
+    )
 
 except:
 
     vix_price = 0
 
 # =====================================================
-# KPIs
+# MARKET QUOTES
+# =====================================================
+
+quotes = [
+
+    "Retailers chase candles. Smart money creates them.",
+
+    "Volume reveals intention before price.",
+
+    "Fake breakouts trap emotions.",
+
+    "Trend is probability, not certainty.",
+
+    "Protect capital first. Profit comes later."
+
+]
+
+quote = random.choice(quotes)
+
+st.markdown(f"""
+<div class="card">
+
+<h3>💡 Market Wisdom</h3>
+
+<p>{quote}</p>
+
+</div>
+""", unsafe_allow_html=True)
+
+# =====================================================
+# KPI ROW
 # =====================================================
 
 k1,k2,k3,k4,k5 = st.columns(5)
 
-change = price - df['Close'].iloc[-2]
+change = price - float(df['Close'].iloc[-2])
 
-pct = (change / df['Close'].iloc[-2]) * 100
+pct = (change / float(df['Close'].iloc[-2])) * 100
 
 with k1:
     st.metric("Spot", round(price,2))
@@ -378,7 +460,7 @@ with k2:
     st.metric("Change %", round(pct,2))
 
 with k3:
-    st.metric("RSI", round(latest['RSI'],2))
+    st.metric("RSI", round(float(latest['RSI']),2))
 
 with k4:
     st.metric("VIX", vix_price)
@@ -387,16 +469,20 @@ with k5:
     st.metric("Confidence", f"{confidence}%")
 
 # =====================================================
-# LAYOUT
+# MAIN LAYOUT
 # =====================================================
 
 left,right = st.columns([3,1])
 
 # =====================================================
-# LEFT
+# LEFT SIDE
 # =====================================================
 
 with left:
+
+    # ================================================
+    # TRADINGVIEW
+    # ================================================
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
@@ -458,7 +544,9 @@ with left:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ================================================
     # OPTION CHAIN
+    # ================================================
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
@@ -466,50 +554,74 @@ with left:
 
     if option_data:
 
-        records = option_data['records']['data']
+        try:
 
-        table = []
+            records = option_data['records']['data']
 
-        for item in records[:15]:
+            table = []
 
-            strike = item.get('strikePrice')
+            for item in records[:15]:
 
-            ce_oi = item.get('CE',{}).get('openInterest',0)
+                strike = item.get('strikePrice')
 
-            pe_oi = item.get('PE',{}).get('openInterest',0)
+                ce_oi = item.get(
+                    'CE',{}
+                ).get(
+                    'openInterest',0
+                )
 
-            ce_change = item.get('CE',{}).get('changeinOpenInterest',0)
+                pe_oi = item.get(
+                    'PE',{}
+                ).get(
+                    'openInterest',0
+                )
 
-            pe_change = item.get('PE',{}).get('changeinOpenInterest',0)
+                ce_change = item.get(
+                    'CE',{}
+                ).get(
+                    'changeinOpenInterest',0
+                )
 
-            table.append([
+                pe_change = item.get(
+                    'PE',{}
+                ).get(
+                    'changeinOpenInterest',0
+                )
 
-                strike,
-                ce_oi,
-                pe_oi,
-                ce_change,
-                pe_change
+                table.append([
 
-            ])
+                    strike,
+                    ce_oi,
+                    pe_oi,
+                    ce_change,
+                    pe_change
 
-        option_df = pd.DataFrame(
+                ])
 
-            table,
+            option_df = pd.DataFrame(
 
-            columns=[
-                "Strike",
-                "CE OI",
-                "PE OI",
-                "CE OI Change",
-                "PE OI Change"
-            ]
+                table,
 
-        )
+                columns=[
 
-        st.dataframe(
-            option_df,
-            use_container_width=True
-        )
+                    "Strike",
+                    "CE OI",
+                    "PE OI",
+                    "CE Change",
+                    "PE Change"
+
+                ]
+
+            )
+
+            st.dataframe(
+                option_df,
+                use_container_width=True
+            )
+
+        except:
+
+            st.warning("Option chain parse issue")
 
     else:
 
@@ -518,53 +630,80 @@ with left:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================
-# RIGHT
+# RIGHT SIDE
 # =====================================================
 
 with right:
 
+    # ================================================
     # SIGNAL
+    # ================================================
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
     st.subheader("🤖 AI Signal")
 
     st.markdown(
+
         f'<div class="{signal_class}">{signal}</div>',
+
         unsafe_allow_html=True
+
     )
 
     st.write(f"Signal Confidence: {confidence}%")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ================================================
     # WARNINGS
+    # ================================================
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
     st.subheader("🚨 Smart Warnings")
 
     if fake_breakout:
-        st.error("Fake breakout detected")
+
+        st.error(
+            "Fake breakout detected"
+        )
 
     if volume_spike:
-        st.warning("Volume spike detected")
+
+        st.warning(
+            "Volume spike detected"
+        )
 
     if abs(price - support) < 30:
-        st.success("Support bounce possible")
+
+        st.success(
+            "Support bounce possible"
+        )
 
     if abs(price - resistance) < 30:
-        st.warning("Resistance pullback possible")
+
+        st.warning(
+            "Resistance pullback possible"
+        )
 
     if latest['RSI'] > 70:
-        st.error("Overbought zone")
+
+        st.error(
+            "Overbought zone"
+        )
 
     if latest['RSI'] < 30:
-        st.success("Oversold zone")
+
+        st.success(
+            "Oversold zone"
+        )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ================================================
     # MARKET MOOD
+    # ================================================
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
@@ -573,29 +712,40 @@ with right:
     st.write(f"Sentiment: {market_sentiment}")
 
     if vix_price > 18:
+
         st.error("High Fear")
 
     elif vix_price < 12:
+
         st.success("Low Fear")
 
     else:
+
         st.info("Normal Volatility")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ================================================
     # NEWS
+    # ================================================
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
 
     st.subheader("📰 Market News")
 
-    for item in all_news[:10]:
+    if len(all_news) > 0:
 
-        st.markdown(f"""
-        <div class="news">
-        {item}
-        </div>
-        """, unsafe_allow_html=True)
+        for item in all_news[:10]:
+
+            st.markdown(f"""
+            <div class="news">
+            {item}
+            </div>
+            """, unsafe_allow_html=True)
+
+    else:
+
+        st.warning("News unavailable")
 
     st.markdown('</div>', unsafe_allow_html=True)
 

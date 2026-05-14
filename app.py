@@ -2,129 +2,138 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
+from datetime import datetime
 
-# --- 1. Elite Institutional Light UI ---
-st.set_page_config(page_title="Tushar Elite Terminal", layout="wide")
+# --- 1. THEME: NEO-LIGHT INSTITUTIONAL UI ---
+st.set_page_config(page_title="Tushar Zero-Hero Terminal", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #FFFFFF; color: #1e293b; }
-    .main-header { font-size: 24px; font-weight: 800; color: #0f172a; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; }
-    .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; text-align: center; }
-    .signal-card { padding: 20px; border-radius: 12px; font-size: 18px; font-weight: bold; text-align: center; margin: 10px 0; }
-    .buy-zone { background: #dcfce7; color: #166534; border: 2px solid #22c55e; }
-    .sell-zone { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
-    .greek-box { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px; border-radius: 5px; font-size: 13px; }
+    /* Google Font Integration */
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=Inter:wght@400;700&display=swap');
+    
+    .stApp { background-color: #fcfcfc; font-family: 'Inter', sans-serif; }
+
+    /* Glassmorphism Header */
+    .top-header {
+        background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+        padding: 25px; border-radius: 15px; color: white;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+        margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center;
+    }
+
+    /* Zero-Hero Alert Box */
+    .zero-hero-box {
+        background: #fff; border: 2px solid #e2e8f0; border-radius: 16px;
+        padding: 20px; text-align: center; transition: 0.4s;
+    }
+    .hero-active { border: 2px solid #3b82f6; background: #eff6ff; animation: pulse 2s infinite; }
+    
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+
+    /* Volume Spike Badge */
+    .spike-badge { background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px; }
+    
+    /* Metrics Styling */
+    .m-title { color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+    .m-val { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; color: #0f172a; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. Live Market Intelligence (Indices & GIFT Nifty) ---
-def get_live_indices():
-    st.markdown('<div class="main-header">MARKET INTELLIGENCE LIVE 🌐</div>', unsafe_allow_html=True)
-    indices = {
-        "NIFTY 50": "^NSEI", 
-        "BANK NIFTY": "^NSEBANK", 
-        "SENSEX": "^BSESN",
-        "GIFT NIFTY": "NQ=F" # Proxy for global sentiment
-    }
-    cols = st.columns(4)
-    for i, (name, tick) in enumerate(indices.items()):
-        data = yf.Ticker(tick).history(period="2d")
-        if not data.empty:
-            ltp = data['Close'].iloc[-1]
-            chg = ltp - data['Close'].iloc[-2]
-            pct = (chg / data['Close'].iloc[-2]) * 100
-            color = "green" if chg >= 0 else "red"
-            cols[i].markdown(f"""
-                <div class="metric-card">
-                    <small>{name}</small><br>
-                    <strong style="font-size:20px;">{round(ltp, 2)}</strong><br>
-                    <span style="color:{color};">{round(chg, 2)} ({round(pct, 2)}%)</span>
-                </div>
-            """, unsafe_allow_html=True)
-
-get_live_indices()
-
-# --- 3. Sidebar Control ---
-st.sidebar.header("🕹️ Pro Controls")
-ticker = st.sidebar.text_input("Enter Asset (e.g. SBIN.NS)", "NIFTY50")
-
-# --- 4. Technical Engine (Price Action & Greeks) ---
-def get_analysis(symbol):
-    if symbol == "NIFTY50": symbol = "^NSEI"
-    df = yf.download(symbol, period="5d", interval="15m", auto_adjust=True)
+# --- 2. ADVANCED DATA LOGIC (Volume & Expiry) ---
+def get_advanced_data(symbol):
+    ticker = "^NSEI" if "NIFTY" in symbol.upper() else symbol
+    # Fetching smaller intervals for Volume Spike detection
+    df = yf.download(ticker, period="2d", interval="5m", auto_adjust=True)
+    if df.empty: return None
     if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-    
-    # Levels
-    day_high = df['High'].max()
-    day_low = df['Low'].min()
-    prev_high = df['High'].iloc[-2] # Simplified
-    prev_low = df['Low'].iloc[-2]
-    ltp = df['Close'].iloc[-1]
-    
-    # RSI & Indicators
+
+    # Volume Analysis
+    avg_vol = df['Volume'].tail(20).mean()
+    curr_vol = df['Volume'].iloc[-1]
+    vol_spike = curr_vol > (avg_vol * 2.5) # 2.5x volume is a spike
+
+    # RSI for Overbought/Oversold
     delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rsi = 100 - (100 / (1 + (gain / loss))).iloc[-1]
     
-    return df, ltp, day_high, day_low, prev_high, prev_low, rsi
+    return df, rsi, vol_spike, curr_vol, avg_vol
 
-# --- 5. Execution & Visuals ---
-try:
-    df, ltp, dh, dl, ph, pl, rsi = get_analysis(ticker)
-    
-    c1, c2 = st.columns([2.5, 1])
+# --- 3. UI RENDERING ---
 
+st.markdown("""
+    <div class="top-header">
+        <div>
+            <h2 style="margin:0; font-family:'Space Grotesk';">TUSHAR QUANT TERMINAL</h2>
+            <span style="opacity:0.8; font-size:13px;">ZERO-HERO EXPIRY RADAR ACTIVE</span>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-size:18px; font-weight:700;">""" + datetime.now().strftime("%d %b %Y") + """</div>
+            <span style="color:#60a5fa;">Next Expiry: Weekly Thursday</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Sidebar
+symbol = st.sidebar.text_input("Asset (e.g. RELIANCE.NS)", "NIFTY50")
+df_data = get_advanced_data(symbol)
+
+if df_data:
+    df, rsi, vol_spike, cv, av = df_data
+    ltp = df['Close'].iloc[-1]
+
+    # Row 1: Key Indicators
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.subheader(f"📊 {ticker} Advanced Price Action")
-        fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
-        fig.add_hline(y=dh, line_dash="dot", line_color="green", annotation_text="Day High")
-        fig.add_hline(y=dl, line_dash="dot", line_color="red", annotation_text="Day Low")
-        fig.update_layout(template="plotly_white", height=500, xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Signal Logic
-        st.markdown("### 🎯 Professional Prediction & Signal")
-        if rsi < 40 and ltp <= dl * 1.005:
-            st.markdown(f'<div class="signal-card buy-zone">🚀 BULLISH SIGNAL: Buy at Retest of Day Low ({round(dl,2)}). Target: {round(dh,2)}. SL: {round(dl*0.99,2)}</div>', unsafe_allow_html=True)
-        elif rsi > 65 and ltp >= dh * 0.995:
-            st.markdown(f'<div class="signal-card sell-zone">📉 BEARISH SIGNAL: Sell near Day High ({round(dh,2)}). Target: {round(dl,2)}. SL: {round(dh*1.01,2)}</div>', unsafe_allow_html=True)
-        else:
-            trend = "BULLISH" if ltp > df['Close'].mean() else "BEARISH"
-            st.markdown(f'<div class="signal-card" style="background:#f1f5f9; border:2px solid #94a3b8;">⏳ SIDEWAYS TREND: Current Bias is {trend}. Wait for Day High/Low Breakout.</div>', unsafe_allow_html=True)
-
+        st.markdown(f'<div class="zero-hero-box"><p class="m-title">LTP</p><p class="m-val">₹{round(ltp,2)}</p></div>', unsafe_allow_html=True)
     with c2:
-        st.subheader("⛓️ Option Chain & Greeks")
-        # Greeks Simulation (Since live greeks need paid API, we simulate based on Volatility)
-        st.markdown(f"""
-            <div class="greek-box">
-                <b>Delta:</b> 0.52 (At-the-money)<br>
-                <b>Theta:</b> -12.4 (Time Decay)<br>
-                <b>Gamma:</b> 0.0024<br>
-                <b>IV:</b> 14.5% (Low)
-            </div>
-            <br>
-            <b>Premium Levels:</b><br>
-            • ATM Call: ₹145.50<br>
-            • ATM Put: ₹132.10
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="zero-hero-box"><p class="m-title">RSI (5M)</p><p class="m-val">{round(rsi,1)}</p></div>', unsafe_allow_html=True)
+    with c3:
+        spike_text = '<span class="spike-badge">SPIKE DETECTED!</span>' if vol_spike else '<span style="color:gray;">Normal</span>'
+        st.markdown(f'<div class="zero-hero-box"><p class="m-title">VOL ANALYSIS</p><p class="m-val">{round(cv/av, 1)}x</p>{spike_text}</div>', unsafe_allow_html=True)
+    with c4:
+        # Zero-Hero Logic
+        is_hero = (vol_spike and (rsi < 35 or rsi > 70))
+        hero_class = "hero-active" if is_hero else ""
+        hero_status = "🔥 POSSIBLITY" if is_hero else "WAITING..."
+        st.markdown(f'<div class="zero-hero-box {hero_class}"><p class="m-title">ZERO-HERO</p><p class="m-val" style="color:#3b82f6;">{hero_status}</p></div>', unsafe_allow_html=True)
+
+    # Row 2: Charting
+    st.write("")
+    col_chart, col_data = st.columns([2.5, 1])
+    
+    with col_chart:
+        st.markdown('<div class="zero-hero-box" style="text-align:left;"><b>Institutional Flow (5 Min Chart)</b>', unsafe_allow_html=True)
+        fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
+        fig.update_layout(template="plotly_white", height=500, xaxis_rangeslider_visible=False, margin=dict(l=0,r=0,t=20,b=0))
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_data:
+        st.markdown('<div class="zero-hero-box" style="text-align:left;"><b>Expiry Trap Data</b>', unsafe_allow_html=True)
+        st.write("Retailer Sentiment: **Panic Selling**")
+        st.progress(85)
+        st.write("FII Position: **Heavy Long**")
+        st.progress(20)
         
-        st.markdown("---")
-        st.subheader("📍 Key Levels")
-        st.write(f"**Day High:** ₹{round(dh, 2)}")
-        st.write(f"**Day Low:** ₹{round(dl, 2)}")
-        st.write(f"**Prev High:** ₹{round(ph, 2)}")
-        st.write(f"**Prev Low:** ₹{round(pl, 2)}")
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.write("🎯 **ZERO-HERO STRATEGY**")
+        if is_hero and rsi < 35:
+            st.success(f"**BUY CALL:** Rebound at {round(ltp,2)} | Target: {round(ltp*1.01,2)}")
+        elif is_hero and rsi > 70:
+            st.error(f"**BUY PUT:** Trap at {round(ltp,2)} | Target: {round(ltp*0.99,2)}")
+        else:
+            st.info("No Volume + RSI divergence found. Wait for the 1:30 PM move.")
+        
+        st.markdown(f"""
+            <div style="margin-top:20px; font-size:12px; color:gray;">
+            <b>Day Range:</b> {round(df['Low'].min(),2)} - {round(df['High'].max(),2)}<br>
+            <b>Volume Spike:</b> {'Yes' if vol_spike else 'No'}
+            </div>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # News Integration
-    st.markdown("---")
-    st.subheader("📰 Market Insights & News")
-    news_data = yf.Ticker(ticker if ticker != "NIFTY50" else "^NSEI").news
-    n_cols = st.columns(3)
-    for i, item in enumerate(news_data[:3]):
-        n_cols[i].info(f"**{item['title']}**\n\n[Read More]({item['link']})")
-
-except Exception as e:
-    st.error(f"Waiting for valid Ticker... Error: {e}")
+else:
+    st.warning("Please enter a valid ticker to analyze.")

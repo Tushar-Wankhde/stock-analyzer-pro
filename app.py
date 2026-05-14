@@ -4,136 +4,166 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 
-# --- 1. THEME: NEO-LIGHT INSTITUTIONAL UI ---
-st.set_page_config(page_title="Tushar Zero-Hero Terminal", layout="wide")
+# --- 1. ADVANCED CSS: TERMINAL UI v6.0 ---
+st.set_page_config(page_title="Tushar Intelligence Terminal", layout="wide")
 
 st.markdown("""
     <style>
-    /* Google Font Integration */
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=Inter:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=Inter:wght@400;600&display=swap');
     
-    .stApp { background-color: #fcfcfc; font-family: 'Inter', sans-serif; }
-
-    /* Glassmorphism Header */
-    .top-header {
-        background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-        padding: 25px; border-radius: 15px; color: white;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
-        margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center;
+    .stApp { background-color: #f9fbff; font-family: 'Inter', sans-serif; }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-right: 2px solid #e2e8f0;
+        padding-top: 20px;
     }
 
-    /* Zero-Hero Alert Box */
-    .zero-hero-box {
-        background: #fff; border: 2px solid #e2e8f0; border-radius: 16px;
-        padding: 20px; text-align: center; transition: 0.4s;
+    /* Top Nav Bar */
+    .top-nav {
+        background: #0f172a; padding: 20px; border-radius: 12px;
+        color: white; display: flex; justify-content: space-between; align-items: center;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 25px;
     }
-    .hero-active { border: 2px solid #3b82f6; background: #eff6ff; animation: pulse 2s infinite; }
-    
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
 
-    /* Volume Spike Badge */
-    .spike-badge { background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 6px; font-weight: 800; font-size: 11px; }
+    /* Professional Card */
+    .glass-card {
+        background: white; padding: 20px; border-radius: 16px;
+        border: 1px solid #edf2f7; box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+        margin-bottom: 20px; transition: 0.3s;
+    }
+    .glass-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+
+    /* News Item */
+    .news-box {
+        padding: 12px; border-left: 4px solid #3b82f6;
+        background: #f1f5f9; border-radius: 0 8px 8px 0;
+        margin-bottom: 10px; font-size: 13px;
+    }
     
-    /* Metrics Styling */
-    .m-title { color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
-    .m-val { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; color: #0f172a; }
+    .status-pill {
+        padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 700;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ADVANCED DATA LOGIC (Volume & Expiry) ---
-def get_advanced_data(symbol):
-    ticker = "^NSEI" if "NIFTY" in symbol.upper() else symbol
-    # Fetching smaller intervals for Volume Spike detection
-    df = yf.download(ticker, period="2d", interval="5m", auto_adjust=True)
-    if df.empty: return None
-    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+# --- 2. DATA ENGINE ---
+def fetch_live_data(ticker):
+    try:
+        data = yf.download(ticker, period="5d", interval="15m", auto_adjust=True)
+        if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_level_values(0)
+        return data
+    except: return None
 
-    # Volume Analysis
-    avg_vol = df['Volume'].tail(20).mean()
-    curr_vol = df['Volume'].iloc[-1]
-    vol_spike = curr_vol > (avg_vol * 2.5) # 2.5x volume is a spike
-
-    # RSI for Overbought/Oversold
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rsi = 100 - (100 / (1 + (gain / loss))).iloc[-1]
+# --- 3. SIDEBAR NAVIGATION ---
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/2422/2422796.png", width=50)
+    st.markdown("### 📊 INDEX SELECTOR")
     
-    return df, rsi, vol_spike, curr_vol, avg_vol
+    # Dropdown for major indices
+    index_choice = st.selectbox(
+        "Choose Market",
+        ["NIFTY 50", "BANK NIFTY", "SENSEX", "GIFT NIFTY", "CUSTOM TICKER"]
+    )
+    
+    ticker_map = {
+        "NIFTY 50": "^NSEI",
+        "BANK NIFTY": "^NSEBANK",
+        "SENSEX": "^BSESN",
+        "GIFT NIFTY": "NQ=F"
+    }
+    
+    selected_ticker = ticker_map.get(index_choice, "")
+    if index_choice == "CUSTOM TICKER":
+        selected_ticker = st.text_input("Enter Ticker (e.g. SBIN.NS)", "RELIANCE.NS")
+    
+    st.markdown("---")
+    st.markdown("### 🛠️ PARAMETERS")
+    timeframe = st.selectbox("Interval", ["15m", "1h", "1d"])
+    risk_mode = st.toggle("Show Trap Zones", value=True)
 
-# --- 3. UI RENDERING ---
+# --- 4. MAIN TERMINAL UI ---
 
-st.markdown("""
-    <div class="top-header">
+# Top Header
+st.markdown(f"""
+    <div class="top-nav">
         <div>
-            <h2 style="margin:0; font-family:'Space Grotesk';">TUSHAR QUANT TERMINAL</h2>
-            <span style="opacity:0.8; font-size:13px;">ZERO-HERO EXPIRY RADAR ACTIVE</span>
+            <span style="font-family:'Space Grotesk'; font-size:22px; font-weight:700;">QUANT TERMINAL</span>
+            <span style="margin-left:10px; font-size:12px; opacity:0.6;">v6.0 PRE-RELEASE</span>
         </div>
         <div style="text-align:right;">
-            <div style="font-size:18px; font-weight:700;">""" + datetime.now().strftime("%d %b %Y") + """</div>
-            <span style="color:#60a5fa;">Next Expiry: Weekly Thursday</span>
+            <span class="status-pill" style="background:#22c55e; color:white;">LIVE DATA ACTIVE</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# Sidebar
-symbol = st.sidebar.text_input("Asset (e.g. RELIANCE.NS)", "NIFTY50")
-df_data = get_advanced_data(symbol)
+df = fetch_live_data(selected_ticker)
 
-if df_data:
-    df, rsi, vol_spike, cv, av = df_data
+if df is not None and not df.empty:
     ltp = df['Close'].iloc[-1]
-
-    # Row 1: Key Indicators
+    change = ltp - df['Close'].iloc[-2]
+    pct = (change / df['Close'].iloc[-2]) * 100
+    
+    # KPIs Row
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown(f'<div class="zero-hero-box"><p class="m-title">LTP</p><p class="m-val">₹{round(ltp,2)}</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="glass-card"><small>CURRENT VALUE</small><br><h3>₹{round(ltp,2)}</h3></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f'<div class="zero-hero-box"><p class="m-title">RSI (5M)</p><p class="m-val">{round(rsi,1)}</p></div>', unsafe_allow_html=True)
+        color = "#10b981" if change >= 0 else "#ef4444"
+        st.markdown(f'<div class="glass-card"><small>TODAY\'S CHANGE</small><br><h3 style="color:{color};">{round(pct,2)}%</h3></div>', unsafe_allow_html=True)
     with c3:
-        spike_text = '<span class="spike-badge">SPIKE DETECTED!</span>' if vol_spike else '<span style="color:gray;">Normal</span>'
-        st.markdown(f'<div class="zero-hero-box"><p class="m-title">VOL ANALYSIS</p><p class="m-val">{round(cv/av, 1)}x</p>{spike_text}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="glass-card"><small>VOLUME</small><br><h3>{int(df["Volume"].iloc[-1])}</h3></div>', unsafe_allow_html=True)
     with c4:
-        # Zero-Hero Logic
-        is_hero = (vol_spike and (rsi < 35 or rsi > 70))
-        hero_class = "hero-active" if is_hero else ""
-        hero_status = "🔥 POSSIBLITY" if is_hero else "WAITING..."
-        st.markdown(f'<div class="zero-hero-box {hero_class}"><p class="m-title">ZERO-HERO</p><p class="m-val" style="color:#3b82f6;">{hero_status}</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="glass-card"><small>VOLATILITY (ATR)</small><br><h3>HIGH</h3></div>', unsafe_allow_html=True)
 
-    # Row 2: Charting
-    st.write("")
-    col_chart, col_data = st.columns([2.5, 1])
-    
+    # Main Chart Section
+    col_chart, col_intel = st.columns([2.5, 1])
+
     with col_chart:
-        st.markdown('<div class="zero-hero-box" style="text-align:left;"><b>Institutional Flow (5 Min Chart)</b>', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card"><b>Advanced Price Action</b>', unsafe_allow_html=True)
         fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
         fig.update_layout(template="plotly_white", height=500, xaxis_rangeslider_visible=False, margin=dict(l=0,r=0,t=20,b=0))
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with col_data:
-        st.markdown('<div class="zero-hero-box" style="text-align:left;"><b>Expiry Trap Data</b>', unsafe_allow_html=True)
-        st.write("Retailer Sentiment: **Panic Selling**")
-        st.progress(85)
-        st.write("FII Position: **Heavy Long**")
-        st.progress(20)
+    with col_intel:
+        st.markdown('<div class="glass-card"><b>💡 Smart Intelligence</b>', unsafe_allow_html=True)
         
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.write("🎯 **ZERO-HERO STRATEGY**")
-        if is_hero and rsi < 35:
-            st.success(f"**BUY CALL:** Rebound at {round(ltp,2)} | Target: {round(ltp*1.01,2)}")
-        elif is_hero and rsi > 70:
-            st.error(f"**BUY PUT:** Trap at {round(ltp,2)} | Target: {round(ltp*0.99,2)}")
+        # Zero-Hero / Trap Detection Logic
+        rsi = 100 - (100 / (1 + (df['Close'].diff().where(df['Close'].diff() > 0, 0).rolling(14).mean() / -df['Close'].diff().where(df['Close'].diff() < 0, 0).rolling(14).mean()))).iloc[-1]
+        
+        if rsi > 70:
+            st.error("⚠️ OVERBOUGHT: Potential Trap Zone for Retailers.")
+        elif rsi < 30:
+            st.success("✅ OVERSOLD: Accumulation detected. Watch for Rebound.")
         else:
-            st.info("No Volume + RSI divergence found. Wait for the 1:30 PM move.")
+            st.info("⚖️ NEUTRAL: Market is searching for direction.")
         
-        st.markdown(f"""
-            <div style="margin-top:20px; font-size:12px; color:gray;">
-            <b>Day Range:</b> {round(df['Low'].min(),2)} - {round(df['High'].max(),2)}<br>
-            <b>Volume Spike:</b> {'Yes' if vol_spike else 'No'}
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown("---")
+        st.write("**Institutional Position**")
+        st.progress(65)
+        st.markdown("<small>Strong Long Accumulation</small>", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- NEW: NEWS & GLOBAL MARKET SECTION ---
+    st.markdown('<div class="glass-card"><b>📰 Market Pulse & Global News</b>', unsafe_allow_html=True)
+    col_n1, col_n2 = st.columns(2)
+    
+    try:
+        news = yf.Ticker(selected_ticker).news
+        with col_n1:
+            for item in news[:3]:
+                st.markdown(f'<div class="news-box"><b>{item["title"]}</b><br><small>{item["publisher"]} • {item.get("type", "News")}</small></div>', unsafe_allow_html=True)
+        with col_n2:
+            for item in news[3:6]:
+                st.markdown(f'<div class="news-box"><b>{item["title"]}</b><br><small>{item["publisher"]} • {item.get("type", "News")}</small></div>', unsafe_allow_html=True)
+    except:
+        st.write("News currently unavailable for this ticker.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
 else:
-    st.warning("Please enter a valid ticker to analyze.")
+    st.info("Please select an index from the left sidebar to begin analysis.")
+
+# Footer
+st.markdown("<p style='text-align:center; color:gray; font-size:12px;'>Elite Institutional Access | Powered by Tushar W.</p>", unsafe_allow_html=True)

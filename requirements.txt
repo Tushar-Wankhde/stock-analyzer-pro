@@ -3,5 +3,5 @@ pandas
 numpy
 yfinance
 plotly
+scikit-learn
 requests
-feedparser
